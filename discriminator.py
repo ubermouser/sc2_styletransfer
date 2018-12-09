@@ -1,11 +1,21 @@
-import keras as k
-import numpy as np
+#!/usr/bin/ python3
+import os
 import gzip
-import tqdm
-from glob import glob
 import sys
 
-SAMPLING_RATE = 5
+import numpy as np
+import keras as k
+import tensorflow as tf
+import tqdm
+from keras.backend.tensorflow_backend import set_session
+
+from sc2_dataset import starcraft_dataset
+
+if os.name == 'nt':
+    DATASET_PATH = os.path.join("B:", "downloads", "test_output.hdf5")
+    set_session(tf.Session(config=tf.ConfigProto(device_count={'GPU': 0})))
+else:
+    DATASET_PATH = os.path.join("/media", "sf_B_DRIVE", "downloads", "test_output.hdf5")
 
 def build_model(input_shape, output_shape):
     input = k.layers.Input(shape=input_shape)
@@ -43,72 +53,21 @@ def build_model(input_shape, output_shape):
     return model
 
 
-def rolling_window(a, window, stride=1):
-    shape = (a.shape[0] - window + 1, window) + a.shape[1:]
-    strides = (a.strides[0] * stride,) + a.strides
-    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+def discriminate(dataset_path, validation_split=0.10):
+    dataset = starcraft_dataset(dataset_path, batch_size=2048)
 
-
-def sample_input_pairs(game_trace, sampling_rate=SAMPLING_RATE):
-    sampled_input = np.array(game_trace[::sampling_rate], copy=True)
-    return rolling_window(sampled_input, 2)
-
-
-def preprocess_input(data_x):
-    shape = data_x.shape
-    data_x = data_x.reshape(shape[0], shape[1] * shape[2], shape[3], shape[4])
-    data_x = np.transpose(data_x, [0, 2, 3, 1])  # channels last
-    data_x = data_x[:, :, :, [5, 7+5]]  # use only the "player_id" tensor because of memory issues
-    return data_x
-
-
-def build_dataset(games_per_player, max_num_games=100):
-    data_x = []
-    data_y = []
-    # extract games in this weird way so the validation set has an equal distribution of games per
-    #  player and so the train set has no overlap with validation set episodes
-    num_games = len(next(iter(games_per_player.values())))
-    num_games = min(num_games, max_num_games)
-    for i_game in tqdm.tqdm(range(num_games)):
-        for i_player, player in enumerate(games_per_player.keys()):
-            game_trace = np.load(gzip.open(games_per_player[player][i_game]))
-            trace_pairs = sample_input_pairs(game_trace)
-            del game_trace
-            data_x.append(trace_pairs)
-            data_y.append([i_player] * len(trace_pairs))
-
-    data_x = np.concatenate(data_x)
-    data_x = preprocess_input(data_x)
-
-    data_y = np.concatenate(data_y)
-    data_y = k.utils.to_categorical(data_y, len(games_per_player))
-
-    return data_x, data_y
-
-
-def discriminate(games_per_player, validation_split=0.10):
-    train_x, train_y = build_dataset(games_per_player)
-
-    model = build_model(input_shape=train_x.shape[1:], output_shape=train_y.shape[1:])
-    print(model.summary())
+    model = build_model(input_shape=dataset.x.shape[1:], output_shape=dataset.y.shape[1:])
+    model.summary()
     try:
-        model.fit(x=train_x, y=train_y, batch_size=512, shuffle=True, epochs=20,
-                  validation_split=validation_split)
+        model.fit_generator(dataset, shuffle=True, epochs=20, use_multiprocessing=False, workers=2)
     except KeyboardInterrupt:
         pass
     print("Saving model...")
-    model.save("trained_model.keras")
-
-
-def find_outputs(path):
-    return glob(path)
+    #model.save("trained_model.keras")
 
 
 def main(sys_args=sys.argv):
-    discriminate({
-        0: find_outputs("data/attack_agent/*.npy.gz"),
-        1: find_outputs("data/random_agent/*.npy.gz"),
-    })
+    discriminate(DATASET_PATH)
 
 
 if __name__ == '__main__':

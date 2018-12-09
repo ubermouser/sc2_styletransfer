@@ -34,7 +34,7 @@ if "flags_defined" not in globals():
     flags.DEFINE_enum("action_space", None, sc2_env.ActionSpace._member_names_,  # pylint: disable=protected-access
                       "Which action space to use. Needed if you take both feature "
                       "and rgb observations.")
-    flags.DEFINE_bool("use_feature_units", False,
+    flags.DEFINE_bool("use_feature_units", True,
                       "Whether to include feature units.")
     flags.DEFINE_bool("disable_fog", False, "Whether to disable Fog of War.")
 
@@ -43,9 +43,9 @@ if "flags_defined" not in globals():
     flags.DEFINE_integer("max_episodes", 0, "Total episodes.")
     flags.DEFINE_integer("step_mul", 8, "Game steps per agent step.")
 
-    flags.DEFINE_string("agent", "predictor_agent.PredictorRandomAgent",
+    flags.DEFINE_string("agent", "zerg_agent.ZergAgent",
                         "Which agent to run, as a python path to an Agent class.")
-    flags.DEFINE_enum("agent_race", "terran", sc2_env.Race._member_names_,  # pylint: disable=protected-access
+    flags.DEFINE_enum("agent_race", "zerg", sc2_env.Race._member_names_,  # pylint: disable=protected-access
                       "Agent 1's race.")
 
     flags.DEFINE_string("agent2", "Bot", "Second agent, either Bot or agent class.")

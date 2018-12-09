@@ -1,21 +1,23 @@
+#!/usr/bin/env python3
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import gzip
-import pickle
+import os
+import tqdm
 
 from absl import app
 from absl import flags
 
-from pysc2 import maps
 from pysc2 import run_configs
 from pysc2.env import sc2_env
 from pysc2.lib import features
 from pysc2.lib import point_flag
 
-from s2clientprotocol import common_pb2 as sc_common
 from s2clientprotocol import sc2api_pb2 as sc_pb
+
+from encoder.replay_encoder import BatchExporter, encode, ENCODER_DTYPE
 
 
 FLAGS = flags.FLAGS
@@ -31,8 +33,16 @@ flags.DEFINE_enum("action_space", None, sc2_env.ActionSpace._member_names_,
                   # pylint: disable=protected-access
                   "Which action space to use. Needed if you take both feature "
                   "and rgb observations.")
-flags.DEFINE_bool("use_feature_units", True,
+flags.DEFINE_bool("use_feature_units", False,
                   "Whether to include feature units.")
+flags.DEFINE_integer("step_mul", 8, "Game steps per observation read.")
+
+
+#REPLAY_PATH = "C:\Program Files (x86)\StarCraft II\Replays"
+REPLAY_PATH = "/media/sf_B_DRIVE/downloads/SC2.4.1.2.60604_2018_05_16/StarCraftII/Replays/"
+#REPLAY_PATH = "B:\downloads\SC2.4.1.2.60604_2018_05_16\StarCraftII\Replays"
+OUT_PATH = "/media/sf_B_DRIVE/downloads"
+
 
 class GameController(object):
     """Wrapper class for interacting with the game in play/replay mode."""
@@ -53,7 +63,7 @@ class GameController(object):
         )
         self._interface = sc2_env.SC2Env._get_interface(
             agent_interface_format, require_raw=False)
-        self._player_id = 2
+        self._player_id = 1
         self._sc2_proc = None
         self._controller = None
         self._replay_data = None
@@ -79,6 +89,8 @@ class GameController(object):
             observed_player_id=self._player_id)
         self._controller.start_replay(start_replay)
 
+        return replay_info
+
     @property
     def controller(self):
         return self._controller
@@ -100,36 +112,45 @@ class GameController(object):
 
 
 class ReplayDumper(object):
-    def __init__(self):
-        pass
+    def __init__(self, exporter):
+        self._exporter = exporter
+        self._step_mul = FLAGS.step_mul
 
-    def process_replay(self, controller):
+    def process_replay(self, controller, replay_info, **kwargs):
         f = features.features_from_game_info(game_info=controller.game_info())
-        observations = []
-        while True:
-            o = controller.observe()
-            obs = f.transform_obs(o)
-            observations.append(obs)
+        steps = 0
+        with tqdm.tqdm() as pbar:
+            while True:
+                pbar.update()
+                steps += 1
 
-            if o.player_result:  # end of game
-                break
+                o = controller.observe()
+                if steps % self._step_mul == 0:
+                    obs = f.transform_obs(o)
 
-            controller.step()
+                    encode(self._exporter, obs, 1, replay_info, steps)
 
-        return observations
+                if o.player_result:  # end of game
+                    break
+
+                controller.step()
+            self._exporter.flush()
+        return
 
 
 def replay_observations(replay_path, output_path):
-    dumper = ReplayDumper()
+    exporter = BatchExporter(output_path, dtypes=ENCODER_DTYPE)
+    dumper = ReplayDumper(exporter)
     with GameController() as game_controller:
-        game_controller.start_replay(replay_path)
-        observations = dumper.process_replay(game_controller.controller)
-
-        pickle.dump(observations, gzip.open(output_path, 'w'))
+        replay_info = game_controller.start_replay(replay_path)
+        dumper.process_replay(game_controller.controller, replay_info, class_label=0)
 
 
 def main(argv):
-    replay_observations("C:\Program Files (x86)\StarCraft II\Replays\ZergAgent\Simple64_2018-11-11-18-23-09.SC2Replay", "output.npy.gz")
+    replay_observations(
+        os.path.join(REPLAY_PATH, "ZergAgent/Simple64_2018-12-08-21-43-41.SC2Replay"),
+        os.path.join(OUT_PATH, "/tmp/output.hdf5"))
+
 
 if __name__ == '__main__':
     app.run(main)

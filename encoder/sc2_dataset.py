@@ -6,8 +6,32 @@ import keras as k
 import numpy as np
 import tqdm
 
+from pysc2.lib import features
 
 SAMPLING_RATE = 5
+
+RACE_MAPPING = {b'Terran': 0, b'Zerg': 1, b'Protoss': 2}
+PLAYER_MAPPING = {
+    # WCS Global:
+    'Classic': 0,
+    'Dark': 1,
+    'Has': 2,
+    'HeRoMaRinE': 3,
+    'HeroMarine': 3,
+    'Lambo': 4,
+    'Maru': 5,
+    'Neeb': 6,
+    'Nerchio': 7,
+    'Rogue': 8,
+    'Serral': 9,
+    'ShoWTimE': 10,
+    'SpeCial': 11,
+    'Stats': 12,
+    'TYTY': 13,
+    'Zest': 14,
+    'sOs': 15,
+    # WCS Montreal:
+}
 
 
 class DataNormalizer(object):
@@ -21,13 +45,14 @@ class DataNormalizer(object):
 
 
 class LabelNormalizer(object):
-    def __init__(self, num_classes):
-        self._num_classes = num_classes
+    def __init__(self, mapping):
+        self._mapping = mapping
+        self._num_categories = len(set(mapping.values())) + 1
+        self._sentinel = self._num_categories - 1
 
     def __call__(self, data):
-        MAPPING = {b'Terran': 0, b'Zerg': 1, b'Protoss': 2}
-        result = np.asarray([MAPPING[x] for x in data])
-        result = k.utils.to_categorical(result, self._num_classes)
+        result = np.asarray([self._mapping.get(x, self._sentinel) for x in data])
+        result = k.utils.to_categorical(result, self._num_categories)
         return result
 
 
@@ -109,13 +134,16 @@ def build_dataset(games_per_player, max_num_games=100):
     return data_x, data_y
 
 
-def shuffle_dataset(input_path):
-    pass
+def starcraft_labels():
+    label_names = {v: k for k, v in PLAYER_MAPPING.items()}
+    label_names[len(label_names)] = 'UNKNOWN'
+    return np.asarray([label_names[i] for i in range(len(label_names))])
 
 
-def starcraft_dataset(input_path, batch_size=2048, num_classes=3):
+def starcraft_dataset(input_path, batch_size=2048):
+    label_names = PLAYER_MAPPING
     x_data = partial(k.utils.HDF5Matrix, input_path, 'feature_minimap', normalizer=DataNormalizer([5]))
-    y_data = partial(k.utils.HDF5Matrix, input_path, 'race', normalizer=LabelNormalizer(num_classes))
+    y_data = partial(k.utils.HDF5Matrix, input_path, 'name', normalizer=LabelNormalizer(label_names))
 
     dataset = StarcraftDataset(x_data, y_data, batch_size=batch_size)
     return dataset

@@ -1,15 +1,12 @@
 #!/usr/bin/ python3
 import os
-import gzip
 import sys
 
-import numpy as np
 import keras as k
 import tensorflow as tf
-import tqdm
 from keras.backend.tensorflow_backend import set_session
 
-from sc2_dataset import starcraft_dataset
+from encoder.sc2_dataset import starcraft_dataset
 
 if os.name == 'nt':
     DATASET_PATH = os.path.join("B:", "downloads", "test_output.hdf5")

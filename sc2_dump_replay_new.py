@@ -20,16 +20,17 @@ import six
 
 from pysc2 import run_configs
 from pysc2.env import sc2_env
+from pysc2.lib import actions
 from pysc2.lib import features
 from pysc2.lib import point_flag
 from pysc2.lib import protocol
 from pysc2.lib import remote_controller
 
-from pysc2.lib import gfile
 from s2clientprotocol import common_pb2 as sc_common
 from s2clientprotocol import sc2api_pb2 as sc_pb
 
-from encoder.replay_encoder import BatchExporter, encode, ENCODER_DTYPE
+from encoder.replay_encoder import get_replay_version
+from encoder.replay_encoder import BatchExporter, encode, ENCODER_DTYPE, replay_paths
 
 
 if os.name == 'nt':
@@ -42,9 +43,9 @@ point_flag.DEFINE_point("feature_screen_size", "84",
                         "Resolution for screen feature layers.")
 point_flag.DEFINE_point("feature_minimap_size", "64",
                         "Resolution for minimap feature layers.")
-point_flag.DEFINE_point("rgb_screen_size", None,
+point_flag.DEFINE_point("rgb_screen_size", "256,192",
                         "Resolution for rendered screen.")
-point_flag.DEFINE_point("rgb_minimap_size", None,
+point_flag.DEFINE_point("rgb_minimap_size", "128",
                         "Resolution for rendered minimap.")
 flags.DEFINE_integer("parallel", 1, "How many instances to run in parallel.")
 flags.DEFINE_integer("step_mul", 8, "How many game steps per observation.")
@@ -57,7 +58,7 @@ flags.DEFINE_enum("action_space", None, sc2_env.ActionSpace._member_names_,
 flags.DEFINE_bool("use_feature_units", False,
                   "Whether to include feature units.")
 #flags.mark_flag_as_required("replays")
-
+FLAGS(sys.argv)
 
 def sorted_dict_str(d):
     return "{%s}" % ", ".join("%s: %s" % (k, d[k])
@@ -156,7 +157,8 @@ class ReplayProcessor(multiprocessing.Process):
             proc_id,
             run_config,
             replay_queue,
-            stats_queue):
+            stats_queue,
+            game_version):
         super(ReplayProcessor, self).__init__()
         self.stats = ProcessStats(proc_id)
         self.run_config = run_config
@@ -164,6 +166,7 @@ class ReplayProcessor(multiprocessing.Process):
         self.stats_queue = stats_queue
         self.step_multplier = FLAGS.step_mul
         self.out_path = FLAGS.out_path % proc_id
+        self.sc2_version = game_version
 
     def interface(self):
         agent_interface_format = features.parse_agent_interface_format(
@@ -185,7 +188,7 @@ class ReplayProcessor(multiprocessing.Process):
             self._update_stage("launch")
             exporter = BatchExporter(self.out_path, mode='a', dtypes=ENCODER_DTYPE)
             try:
-                with self.run_config.start() as controller:
+                with self.run_config.start(version=self.sc2_version) as controller:
                     self._print("SC2 Started successfully.")
                     ping = controller.ping()
                     for _ in range(300):
@@ -257,7 +260,9 @@ class ReplayProcessor(multiprocessing.Process):
             options=self.interface(),
             observed_player_id=player_id))
 
-        feat = features.features_from_game_info(controller.game_info())
+        feat = features.features_from_game_info(
+            controller.game_info(), use_feature_units=False,
+            action_space=actions.ActionSpace[FLAGS.action_space.upper()])
 
         steps = 0
         self.stats.replay_stats.replays += 1
@@ -284,7 +289,7 @@ class ReplayProcessor(multiprocessing.Process):
 
 def stats_printer(stats_queue):
     """A thread that consumes stats_queue and prints them every 10 seconds."""
-    proc_stats = [ProcessStats(i) for i in range(FLAGS.parallel)]
+    proc_stats = [ProcessStats(i) for i in range(max(FLAGS.parallel, 1))]
     print_time = start_time = time.time()
     width = 107
 
@@ -323,9 +328,6 @@ def main(unused_argv):
     """Dump stats about all the actions that are in use in a set of replays."""
     run_config = run_configs.get()
 
-    if not gfile.Exists(FLAGS.replays):
-        sys.exit("{} doesn't exist.".format(FLAGS.replays))
-
     stats_queue = multiprocessing.Queue()
     stats_thread = threading.Thread(target=stats_printer, args=(stats_queue,))
     stats_thread.start()
@@ -336,8 +338,14 @@ def main(unused_argv):
         # is work in the queue before the SC2 processes actually run, otherwise
         # The replay_queue.join below succeeds without doing any work, and exits.
         print("Getting replay list:", FLAGS.replays)
-        replay_list = sorted(run_config.replay_paths(FLAGS.replays))
+        replay_list = sorted(replay_paths(FLAGS.replays))
         print(len(replay_list), "replays found.\n")
+
+        if len(replay_list) > 0:
+            game_version = get_replay_version(replay_list[0])
+        else:
+            game_version = None
+
         replay_queue = multiprocessing.JoinableQueue(FLAGS.parallel * 10)
         replay_queue_thread = threading.Thread(target=replay_queue_filler,
                                                args=(replay_queue, replay_list))
@@ -346,12 +354,12 @@ def main(unused_argv):
 
         if FLAGS.parallel > 0:
             for i in range(FLAGS.parallel):
-                p = ReplayProcessor(i, run_config, replay_queue, stats_queue)
+                p = ReplayProcessor(i, run_config, replay_queue, stats_queue, game_version)
                 p.daemon = True
                 p.start()
                 time.sleep(1)  # Stagger startups, otherwise they seem to conflict somehow
         else:
-            ReplayProcessor(0, run_config, replay_queue, stats_queue).run()
+            ReplayProcessor(0, run_config, replay_queue, stats_queue, game_version).run()
 
         replay_queue.join()  # Wait for the queue to empty.
     except KeyboardInterrupt:
@@ -362,4 +370,5 @@ def main(unused_argv):
 
 
 if __name__ == "__main__":
+    FLAGS(sys.argv)
     app.run(main)

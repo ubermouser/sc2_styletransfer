@@ -116,7 +116,7 @@ class ReplayDumper(object):
         self._exporter = exporter
         self._step_mul = FLAGS.step_mul
 
-    def process_replay(self, controller, replay_info, **kwargs):
+    def process_replay(self, controller, replay_path, replay_info, **kwargs):
         f = features.features_from_game_info(game_info=controller.game_info())
         steps = 0
         with tqdm.tqdm() as pbar:
@@ -128,7 +128,7 @@ class ReplayDumper(object):
                 if steps % self._step_mul == 0:
                     obs = f.transform_obs(o)
 
-                    encode(self._exporter, obs, 1, replay_info, steps)
+                    encode(self._exporter, obs, 1, replay_path, replay_info, steps)
 
                 if o.player_result:  # end of game
                     break
@@ -143,7 +143,7 @@ def replay_observations(replay_path, output_path):
     dumper = ReplayDumper(exporter)
     with GameController() as game_controller:
         replay_info = game_controller.start_replay(replay_path)
-        dumper.process_replay(game_controller.controller, replay_info, class_label=0)
+        dumper.process_replay(game_controller.controller, replay_path, replay_info, class_label=0)
 
 
 def main(argv):

@@ -1,11 +1,18 @@
 from collections import defaultdict
 from functools import lru_cache
+from glob import glob
+import os
 
+import six
+import mpyq
+import json
 import h5py
 import numpy as np
 import tqdm
 
 from pysc2.lib import features
+from pysc2.run_configs import lib as run_configs_lib
+
 from s2clientprotocol import common_pb2 as sc_common
 import sc2reader
 
@@ -28,8 +35,10 @@ class BatchExporter(object):
         self.flush()
 
     def close(self):
-        self.flush()
-        self._out.close()
+        try:
+            self.flush()
+        finally:
+            self._out.close()
 
     def flush(self):
         for dataset, output in self._cache.items():
@@ -63,13 +72,41 @@ class BatchExporter(object):
         self._size = 0
 
 
+def get_replay_version(replay_path):
+    with open(replay_path, "rb") as f:
+        replay_data = f.read()
+
+    replay_io = six.BytesIO()
+    replay_io.write(replay_data)
+    replay_io.seek(0)
+    archive = mpyq.MPQArchive(replay_io).extract()
+    metadata = json.loads(archive[b"replay.gamemetadata.json"].decode("utf-8"))
+    return run_configs_lib.Version(
+        game_version=".".join(metadata["GameVersion"].split(".")[:-1]),
+        build_version=int(metadata["BaseBuild"][4:]),
+        data_version=metadata.get("DataVersion"),  # Only in replays version 4.1+.
+        binary=None)
+
+
+def replay_paths(replay_dir):
+    """A generator yielding the full path to the replays under `replay_dir`."""
+    for dirpath, dirnames, filenames in os.walk(replay_dir):
+        for file in filenames:
+            if os.path.splitext(file)[1].lower() == ".sc2replay":
+                yield os.path.join(dirpath, file)
+
+
 @lru_cache()
 def player_names(replay_path):
     replay = sc2reader.load_replay(replay_path, load_level=2)
     return {id: p.name for id, p in replay.player.items()}
 
 
-ENCODER_DTYPE = {'name': h5py.special_dtype(vlen=str), 'race': 'S7'}
+ENCODER_DTYPE = {
+    'replay_path': h5py.special_dtype(vlen=str),
+    'name': h5py.special_dtype(vlen=str),
+    'race': 'S7'
+}
 
 
 def encode(exporter, obs, player_id, replay_path, replay_info, step_index):
@@ -84,6 +121,7 @@ def encode(exporter, obs, player_id, replay_path, replay_info, step_index):
         feature_screen=obs['feature_screen'],
         score_cumulative=obs['score_cumulative'],
         player_stats=obs['player'],
+        replay_path=replay_path,
         mmr=player_mmr,
         name=player_name,
         race=player_race,

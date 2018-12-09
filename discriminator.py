@@ -9,10 +9,16 @@ from keras.backend.tensorflow_backend import set_session
 from encoder.sc2_dataset import starcraft_dataset
 
 if os.name == 'nt':
-    DATASET_PATH = os.path.join("B:", "downloads", "test_output.hdf5")
-    set_session(tf.Session(config=tf.ConfigProto(device_count={'GPU': 0})))
+    DATASET_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
+    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
+    OUT_PATH = os.path.join("B:", "documents", "sc2_trained_model.keras")
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    set_session(tf.Session(config=config))
 else:
-    DATASET_PATH = os.path.join("/media", "sf_B_DRIVE", "downloads", "test_output.hdf5")
+    DATASET_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_global.h5py")
+    VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
+    OUT_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_trained_model.keras")
 
 def build_model(input_shape, output_shape):
     input = k.layers.Input(shape=input_shape)
@@ -50,21 +56,31 @@ def build_model(input_shape, output_shape):
     return model
 
 
-def discriminate(dataset_path, validation_split=0.10):
-    dataset = starcraft_dataset(dataset_path, batch_size=2048)
+def discriminate(dataset_path, validation_path, out_path=None):
+    train_set = starcraft_dataset(dataset_path, batch_size=1024)
+    validation_set = starcraft_dataset(validation_path, batch_size=1024)
 
-    model = build_model(input_shape=dataset.x.shape[1:], output_shape=dataset.y.shape[1:])
+    model = build_model(input_shape=train_set.x.shape[1:], output_shape=train_set.y.shape[1:])
     model.summary()
     try:
-        model.fit_generator(dataset, shuffle=True, epochs=20, use_multiprocessing=False, workers=2)
+        model.fit_generator(
+            train_set,
+            # steps_per_epoch=10,
+            validation_data=validation_set,
+            # validation_steps=10,
+            shuffle=True,
+            epochs=20,
+            use_multiprocessing=True,
+            workers=4)
     except KeyboardInterrupt:
         pass
-    print("Saving model...")
-    #model.save("trained_model.keras")
+    if out_path is not None:
+        print("Saving model...")
+        model.save("trained_model.keras")
 
 
 def main(sys_args=sys.argv):
-    discriminate(DATASET_PATH)
+    discriminate(DATASET_PATH, VALIDATION_PATH, OUT_PATH)
 
 
 if __name__ == '__main__':

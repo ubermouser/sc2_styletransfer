@@ -8,7 +8,7 @@ import tqdm
 from encoder.replay_encoder import BatchExporter, ENCODER_DTYPE
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 512
 def create_shuffle_index(in_file_sizes):
     dataset_size = sum(in_file_sizes)
     shuffle_index = np.zeros((dataset_size, 2), dtype=np.uint64)
@@ -27,7 +27,7 @@ def create_shuffle_index(in_file_sizes):
 def main(input_paths, out_path):
     in_files = [h5py.File(in_path) for in_path in input_paths]
     in_file_sizes = [0] * len(in_files)
-    out_file = h5py.File(out_path, mode='w')
+    out_file = BatchExporter(out_path, batch_size=BATCH_SIZE, dtypes=ENCODER_DTYPE)
 
     datasets = list(in_files[0].keys())
     datasets_per_file = defaultdict(dict)
@@ -37,32 +37,15 @@ def main(input_paths, out_path):
             datasets_per_file[in_path][dataset] = in_file[dataset]
 
     shuffle_index = create_shuffle_index(in_file_sizes)
-    for dataset in datasets:
-        current_inset = datasets_per_file[0][dataset]
-        out_file.create_dataset(
-            dataset,
-            shape=(len(shuffle_index),) + current_inset.shape[1:],
-            dtype=current_inset.dtype,
-            compression='gzip',
-            compression_opts=9,
-            shuffle=True)
 
-    num_batches = int(np.ceil(len(shuffle_index) / BATCH_SIZE))
-    for batch in tqdm.tqdm(range(num_batches)):
-        start = batch * BATCH_SIZE
-        end = min((batch + 1) * BATCH_SIZE, len(shuffle_index))
-        shuffle_index_batch = shuffle_index[start:end]
+    for row_idx, dataset_idx in tqdm.tqdm(shuffle_index):
+        current_infile = datasets_per_file[dataset_idx]
+        export = {dataset: current_infile[dataset][row_idx] for dataset in datasets}
+        out_file.export(**export)
 
-        row_outs = defaultdict(list)
-        for row_idx, dataset_idx in shuffle_index_batch:
-            current_infile = datasets_per_file[dataset_idx]
-            for dataset in datasets:
-                row_outs[dataset].append(current_infile[dataset][row_idx])
-
-        for dataset in datasets:
-            out_file[dataset][start:end] = row_outs[dataset]
-
+    out_file.close()
     return
+
 
 if __name__ == "__main__":
     in_files = sys.argv[1:]

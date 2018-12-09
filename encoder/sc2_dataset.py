@@ -25,7 +25,9 @@ class LabelNormalizer(object):
         self._num_classes = num_classes
 
     def __call__(self, data):
-        result = k.utils.to_categorical(data, self._num_classes)
+        MAPPING = {b'Terran': 0, b'Zerg': 1, b'Protoss': 2}
+        result = np.asarray([MAPPING[x] for x in data])
+        result = k.utils.to_categorical(result, self._num_classes)
         return result
 
 
@@ -111,9 +113,9 @@ def shuffle_dataset(input_path):
     pass
 
 
-def starcraft_dataset(input_path, batch_size=2048, num_classes=2):
+def starcraft_dataset(input_path, batch_size=2048, num_classes=3):
     x_data = partial(k.utils.HDF5Matrix, input_path, 'feature_minimap', normalizer=DataNormalizer([5]))
-    y_data = partial(k.utils.HDF5Matrix, input_path, 'player', normalizer=LabelNormalizer(num_classes))
+    y_data = partial(k.utils.HDF5Matrix, input_path, 'race', normalizer=LabelNormalizer(num_classes))
 
     dataset = StarcraftDataset(x_data, y_data, batch_size=batch_size)
     return dataset

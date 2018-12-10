@@ -12,25 +12,34 @@ SAMPLING_RATE = 5
 
 RACE_MAPPING = {b'Terran': 0, b'Zerg': 1, b'Protoss': 2}
 PLAYER_MAPPING = {
-    # WCS Global:
-    'Classic': 0,
-    'Dark': 1,
-    'Has': 2,
-    'HeRoMaRinE': 3,
-    'HeroMarine': 3,
-    'Lambo': 4,
-    'Maru': 5,
-    'Neeb': 6,
-    'Nerchio': 7,
-    'Rogue': 8,
-    'Serral': 9,
-    'ShoWTimE': 10,
-    'SpeCial': 11,
+    # Shared:
+    'Has': 0,
+    'HeRoMaRinE': 1, 'HeroMarine': 1,
+    'Lambo': 2,
+    'Neeb': 3,
+    'Nerchio': 4,
+    'Serral': 5,
+    'ShoWTimE': 6,
+    'SpeCial': 7,
+    # WCS Global only:
+    'Classic': 8,
+    'Dark': 9,
+    'Maru': 10,
+    'Rogue': 11,
     'Stats': 12,
     'TYTY': 13,
     'Zest': 14,
     'sOs': 15,
-    # WCS Montreal:
+    # WCS Montreal only:
+    'Reynor': 16,
+    'TIME': 17,
+    'JonSnow': 18,
+    'Denver': 19,
+    'Semper': 20,
+    'Zanster': 21,
+    'Clem': 22,
+    'DnS': 23,
+    'Stephano': 24
 }
 
 

@@ -10,15 +10,15 @@ from encoder.sc2_dataset import starcraft_dataset
 
 USE_MULTIPROCESSING = True
 if os.name == 'nt':
-    DATASET_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
-    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
+    DATASET_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal_ordered.h5py")
+    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
     OUT_PATH = os.path.join("B:", "documents", "sc2_trained_model.keras")
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     set_session(tf.Session(config=config))
 else:
-    DATASET_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_global.h5py")
-    VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
+    DATASET_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_montreal_ordered.h5py")
+    VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_global.h5py")
     OUT_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_trained_model.keras")
 
 tf.logging.set_verbosity(tf.logging.WARN)

@@ -9,7 +9,6 @@ from keras.backend.tensorflow_backend import set_session
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
-import tabulate
 
 from encoder.sc2_dataset import starcraft_dataset, starcraft_labels
 
@@ -17,7 +16,7 @@ if os.name == 'nt':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     set_session(tf.Session(config=config))
-    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
+    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
     OUT_PATH = os.path.join("B:", "documents", "sc2_trained_model.keras")
 else:
     VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_montreal_0.h5py")

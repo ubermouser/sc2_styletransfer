@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+import argparse
 import itertools
 import os
 
@@ -10,17 +12,18 @@ import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
 
+from encoder.sc2_model import build_model
 from encoder.sc2_dataset import starcraft_dataset, starcraft_labels
 
 if os.name == 'nt':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     set_session(tf.Session(config=config))
-    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
-    OUT_PATH = os.path.join("B:", "documents", "sc2_trained_model.keras")
+    VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
+    OUT_PATH = os.path.join("B:", "documents", "sc2_discriminator-splitplayer.keras")
 else:
-    VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_montreal_0.h5py")
-    OUT_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_trained_model.keras")
+    VALIDATION_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_datasets", "wcs_global.h5py")
+    OUT_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_trained_model_shuffled.keras")
 
 
 def plot_confusion_matrix(
@@ -64,7 +67,8 @@ def evaluate(validation_path, model_path):
     validation_set = starcraft_dataset(validation_path, batch_size=2048)
 
     print("Loading model %s..." % model_path)
-    model = k.models.load_model(model_path)
+    model = build_model(validation_set)
+    model.load_weights(model_path)
 
     y_pred = model.predict_generator(
         validation_set,
@@ -90,4 +94,9 @@ def evaluate(validation_path, model_path):
 
 
 if __name__ == '__main__':
-    evaluate(VALIDATION_PATH, OUT_PATH)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("model", type=str)
+    parser.add_argument("--validation-set", default=VALIDATION_PATH, type=str)
+    args = parser.parse_args()
+
+    evaluate(args.validation_set, args.model)

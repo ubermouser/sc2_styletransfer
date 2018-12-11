@@ -3,6 +3,7 @@ import gzip
 
 import h5py
 import keras as k
+from keras.utils import HDF5Matrix
 import numpy as np
 import tqdm
 
@@ -41,16 +42,40 @@ PLAYER_MAPPING = {
     'DnS': 23,
     'Stephano': 24
 }
+GT_MAPPING = ['AeiS', 'Beez', 'Bioice', 'Bly', 'Buster', 'CalebAracous', 'Cham',
+       'Clem', 'Crow', 'Cuddlebear', 'Cyan', 'Daydreamer', 'Denver',
+       'DisK', 'DnS', 'Dolan', 'Elazer', 'ElegancE', 'Ethereal', 'ExpecT',
+       'Frontstab', 'Future', 'GoGojOey', 'GogojOey', 'Harstem', 'Has',
+       'HeroMarine', 'Hjax', 'HuT', 'JackO', 'JadedShard', 'Jason',
+       'JonSnow', 'Kelazhur', 'Kozan', 'Lambo', 'Lighting', 'LiquidTLO',
+       'MDStephano', 'MaSa', 'Mackintac', 'Mage', 'Mana', 'Namshar',
+       'NeXa', 'Neeb', 'Nerchio', 'Nice', 'Ninja', 'NoRegreT', 'PengWin',
+       'Poizon', 'Probe', 'PtitDrogo', 'Pure', 'Raze', 'Reynor', 'Rhizer',
+       'Scarlett', 'Semper', 'Serral', 'ShaDoWn', 'ShoWTimE', 'Silky',
+       'Snute', 'SpaceJam', 'SpeCial', 'Stephano', 'StevenBonnel',
+       'Sugar', 'THERIDDLER', 'TIME', 'TRUE', 'TheWagon', 'TooDming',
+       'Wilo', 'Zanster', 'cloudy', 'eonblu', 'harstem', 'jheffe', 'mLty',
+       'soul', 'thermy', 'uThermaL']
+GT_MAPPING = {name: idx for idx, name in enumerate(GT_MAPPING)}
+GT_MAPPING['HeRoMaRinE'] = GT_MAPPING['HeroMarine']
+
+FEATURE_MINIMAP_PLAYER_RELATIVE = 5
 
 
-class DataNormalizer(object):
+class MinimapNormalizer(object):
     def __init__(self, channels):
-        self._channels = list(channels)
+        pass
 
     def __call__(self, data):
-        result = np.transpose(data, [0, 2, 3, 1])  # channels last
-        result = result[:, :, :, self._channels]
-        return result
+        # player_mask = data[:, FEATURE_MINIMAP_PLAYER_RELATIVE, :, :, np.newaxis]
+        # # split player ownership into a set of bitmasks. Concatenate channels last
+        # result = np.concatenate([
+        #     player_mask == features.PlayerRelative.SELF,
+        #     player_mask == features.PlayerRelative.NEUTRAL,
+        #     player_mask == features.PlayerRelative.ENEMY
+        # ], axis=3)
+        # result = result.astype(np.float32)
+        return data
 
 
 class LabelNormalizer(object):
@@ -66,38 +91,36 @@ class LabelNormalizer(object):
 
 
 class StarcraftDataset(k.utils.Sequence):
-    def __init__(self, data_normalizer, label_normalizer, batch_size):
-        self.x_proto = data_normalizer
-        self.y_proto = label_normalizer
-
-        self.x = self.x_proto()
-        self.y = self.y_proto()
-        assert len(self.x) == len(self.y)
-
+    def __init__(self, feature_minimap_proto, label_proto, batch_size):
         self.batch_size = batch_size
+        self.feature_minimap_proto = feature_minimap_proto
+        self.y_proto = label_proto
 
-    def __getstate__(self):
-        odict = self.__dict__.copy()
-        del odict['x']
-        del odict['y']
-        return odict
+        self.__setstate__({})
+        assert len(self.feature_minimap) == len(self.y)
 
     def __setstate__(self, state):
         self.__dict__.update(state)
 
-        self.x = self.x_proto()
+        self.feature_minimap = self.feature_minimap_proto()
         self.y = self.y_proto()
 
+    def __getstate__(self):
+        odict = self.__dict__.copy()
+        del odict['feature_minimap']
+        del odict['y']
+        return odict
+
     def __len__(self):
-        return int(np.ceil(len(self.x) / float(self.batch_size)))
+        return int(np.ceil(len(self.y) / float(self.batch_size)))
 
     def __getitem__(self, idx):
         low = idx * self.batch_size
         high = min((idx + 1) * self.batch_size, len(self.y))
-        batch_x = self.x[low:high]
+        batch_minimap = self.feature_minimap[low:high]
         batch_y = self.y[low:high]
 
-        return batch_x, batch_y
+        return {'feature_minimap': batch_minimap}, batch_y
 
 
 def rolling_window(a, window, stride=1):
@@ -144,15 +167,16 @@ def build_dataset(games_per_player, max_num_games=100):
 
 
 def starcraft_labels():
-    label_names = {v: k for k, v in PLAYER_MAPPING.items()}
+    label_names = {v: k for k, v in GT_MAPPING.items()}
     label_names[len(label_names)] = 'UNKNOWN'
     return np.asarray([label_names[i] for i in range(len(label_names))])
 
 
 def starcraft_dataset(input_path, batch_size=2048):
-    label_names = PLAYER_MAPPING
-    x_data = partial(k.utils.HDF5Matrix, input_path, 'feature_minimap', normalizer=DataNormalizer([5]))
-    y_data = partial(k.utils.HDF5Matrix, input_path, 'name', normalizer=LabelNormalizer(label_names))
+    #label_names = {name: idx for idx, name in enumerate(np.unique(h5py.File(input_path)['name']))}
+    label_names = GT_MAPPING
+    x_data = partial(HDF5Matrix, input_path, 'feature_minimap')
+    y_data = partial(HDF5Matrix, input_path, 'name', normalizer=LabelNormalizer(label_names))
 
     dataset = StarcraftDataset(x_data, y_data, batch_size=batch_size)
     return dataset

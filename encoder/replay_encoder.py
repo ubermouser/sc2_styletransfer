@@ -57,6 +57,7 @@ class BatchExporter(object):
                     dataset,
                     shape=shape,
                     maxshape=(None,) + shape[1:],
+                    chunks=(self._batch_size,) + shape[1:],
                     dtype=dtype,
                     compression='gzip',
                     compression_opts=9,

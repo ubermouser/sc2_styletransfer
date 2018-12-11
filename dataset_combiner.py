@@ -30,8 +30,10 @@ def main(input_paths, out_path):
             dataset,
             shape=(0,) + current_infile.shape[1:],
             maxshape=(None,) + current_infile.shape[1:],
+            chunks=(BATCH_SIZE,) + current_infile.shape[1:],
             dtype=current_infile.dtype,
             compression='gzip',
+            compression_opts=9,
             shuffle=True
         )
 

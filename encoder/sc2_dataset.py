@@ -91,9 +91,10 @@ class LabelNormalizer(object):
 
 
 class StarcraftDataset(k.utils.Sequence):
-    def __init__(self, feature_minimap_proto, label_proto, batch_size):
+    def __init__(self, feature_minimap_proto, feature_screen_proto, label_proto, batch_size):
         self.batch_size = batch_size
         self.feature_minimap_proto = feature_minimap_proto
+        self.feature_screen_proto = feature_screen_proto
         self.y_proto = label_proto
 
         self.__setstate__({})
@@ -103,11 +104,13 @@ class StarcraftDataset(k.utils.Sequence):
         self.__dict__.update(state)
 
         self.feature_minimap = self.feature_minimap_proto()
+        self.feature_screen = self.feature_screen_proto()
         self.y = self.y_proto()
 
     def __getstate__(self):
         odict = self.__dict__.copy()
         del odict['feature_minimap']
+        del odict['feature_screen']
         del odict['y']
         return odict
 
@@ -118,9 +121,10 @@ class StarcraftDataset(k.utils.Sequence):
         low = idx * self.batch_size
         high = min((idx + 1) * self.batch_size, len(self.y))
         batch_minimap = self.feature_minimap[low:high]
+        batch_screen = self.feature_screen[low:high]
         batch_y = self.y[low:high]
 
-        return {'feature_minimap': batch_minimap}, batch_y
+        return {'feature_minimap': batch_minimap, 'feature_screen': batch_screen}, batch_y
 
 
 def rolling_window(a, window, stride=1):
@@ -172,11 +176,12 @@ def starcraft_labels():
     return np.asarray([label_names[i] for i in range(len(label_names))])
 
 
-def starcraft_dataset(input_path, batch_size=2048):
+def starcraft_dataset(input_path, batch_size=1024):
     #label_names = {name: idx for idx, name in enumerate(np.unique(h5py.File(input_path)['name']))}
     label_names = GT_MAPPING
-    x_data = partial(HDF5Matrix, input_path, 'feature_minimap')
+    minimap_data = partial(HDF5Matrix, input_path, 'feature_minimap')
+    screen_data = partial(HDF5Matrix, input_path, 'feature_screen')
     y_data = partial(HDF5Matrix, input_path, 'name', normalizer=LabelNormalizer(label_names))
 
-    dataset = StarcraftDataset(x_data, y_data, batch_size=batch_size)
+    dataset = StarcraftDataset(minimap_data, screen_data, y_data, batch_size=batch_size)
     return dataset

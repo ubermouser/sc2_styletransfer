@@ -27,11 +27,11 @@ else:
 
 def discriminate(dataset_path, validation_path=None, out_path=None):
     print("Loading training set %s..." % dataset_path)
-    train_set = starcraft_dataset(dataset_path, batch_size=2048)
+    train_set = starcraft_dataset(dataset_path, batch_size=128)
 
     if validation_path is not None:
         print("Loading validation set %s..." % validation_path)
-        validation_set = starcraft_dataset(validation_path, batch_size=2048)
+        validation_set = starcraft_dataset(validation_path, batch_size=128)
     else:
         validation_set = None
 

@@ -199,16 +199,16 @@ class ReplayProcessor(multiprocessing.Process):
                             self._print("Empty queue, returning")
                             return
                         try:
-                            replay_name = os.path.basename(replay_path)[:10]
+                            replay_name = os.path.basename(replay_path)[:30]
                             self.stats.replay = replay_name
                             self._print("Got replay: %s" % replay_path)
                             self._update_stage("open replay file")
                             replay_data = self.run_config.replay_data(replay_path)
                             self._update_stage("replay_info")
                             info = controller.replay_info(replay_data)
-                            self._print((" Replay Info %s " % replay_name).center(60, "-"))
+                            self._print((" Replay Info %s " % replay_name).center(80, "-"))
                             self._print(info)
-                            self._print("-" * 60)
+                            self._print("-" * 80)
                             replay_validity = valid_replay(info, ping)
                             if replay_validity is None:
                                 self.stats.replay_stats.maps[info.map_name] += 1

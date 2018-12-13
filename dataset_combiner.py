@@ -7,9 +7,9 @@ import tqdm
 
 from encoder.replay_encoder import BatchExporter, ENCODER_DTYPE
 
-
+CHUNK_SIZE = 512
 BATCH_SIZE = 1024
-
+SCALE_OFFSET = {'feature_minimap', 'feature_screen'}
 
 def main(input_paths, out_path):
     in_files = [h5py.File(in_path) for in_path in input_paths]
@@ -24,18 +24,20 @@ def main(input_paths, out_path):
             datasets_per_file[in_path][dataset] = in_file[dataset]
 
     for dataset in datasets:
-        print("Dataset %s..." % dataset)
         current_infile = datasets_per_file[0][dataset]
-        out_set = out_file.create_dataset(
-            dataset,
+        args = dict(
+            name=dataset,
             shape=(0,) + current_infile.shape[1:],
             maxshape=(None,) + current_infile.shape[1:],
-            chunks=(BATCH_SIZE,) + current_infile.shape[1:],
+            chunks=(CHUNK_SIZE,) + current_infile.shape[1:],
             dtype=current_infile.dtype,
             compression='gzip',
             compression_opts=9,
-            shuffle=True
+            shuffle=True,
+            scaleoffset=0 if dataset in SCALE_OFFSET else None
         )
+        print("Dataset %s: %s" % (dataset, args))
+        out_set = out_file.create_dataset(**args)
 
         for in_path in range(len(input_paths)):
             print("In-file %s..." % input_paths[in_path])

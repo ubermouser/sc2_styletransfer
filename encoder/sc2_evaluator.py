@@ -45,18 +45,19 @@ def plot_confusion_matrix(
 
 def filter_empty_labels(y_true, y_pred, target_names):
     label_counts = np.bincount(y_true, minlength=len(target_names))
-    label_mapping = np.zeros(len(target_names), dtype=np.int32)
-
-    target_names = [name for idx, name in enumerate(target_names) if label_counts[idx] > 0]
+    num_nonzero_labels = np.count_nonzero(label_counts)
 
     filter_mask = np.ones_like(y_true, dtype=np.bool)
     for idx, count in enumerate(label_counts):
         if count == 0:
             filter_mask[y_true == idx] = False
 
-    label_mapping[label_counts > 0] = np.arange(len(target_names))
+    label_mapping = np.full(len(target_names), fill_value=num_nonzero_labels-1, dtype=np.int32)
+    label_mapping[label_counts > 0] = np.arange(num_nonzero_labels)
+
     y_true = label_mapping[y_true[filter_mask]]
     y_pred = label_mapping[y_pred[filter_mask]]
+    target_names = [name for idx, name in enumerate(target_names) if label_counts[idx] > 0]
 
     return y_true, y_pred, target_names
 

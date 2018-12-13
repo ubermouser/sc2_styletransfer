@@ -32,17 +32,22 @@ def evaluate(validation_path, model_path):
     model.load_weights(model_path)
     model.summary()
 
-    y_pred = model.predict_generator(
+    y_pred, race_pred = model.predict_generator(
         validation_set,
         use_multiprocessing=True,
         workers=5,
         verbose=1)
     print("Evaluating...")
     y_true = np.argmax(validation_set.y[:len(y_pred)], axis=1)
+    race_true = np.argmax(validation_set.race[:len(race_pred)], axis=1)
+
     y_pred = np.argmax(y_pred, axis=1)
+    race_pred = np.argmax(race_pred, axis=1)
+
     target_names = starcraft_labels()
 
     evaluate_feature(y_true, y_pred, target_names, filter_empty=True)
+    evaluate_feature(race_true, race_pred, ['Terran', 'Zerg', 'Protoss'])
 
 
 if __name__ == '__main__':

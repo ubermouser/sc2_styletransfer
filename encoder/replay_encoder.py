@@ -18,7 +18,7 @@ import sc2reader
 
 
 class BatchExporter(object):
-    def __init__(self, output_path, mode='w', batch_size=125, dtypes={}):
+    def __init__(self, output_path, mode='w', batch_size=512, dtypes={}):
         self._batch_size = batch_size
         self._out = h5py.File(output_path, mode)
         self._cache = defaultdict(list)

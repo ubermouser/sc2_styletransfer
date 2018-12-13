@@ -12,6 +12,7 @@ from encoder.sc2_dataset import starcraft_dataset
 
 tf.logging.set_verbosity(tf.logging.WARN)
 USE_MULTIPROCESSING = True
+BATCH_SIZE = 512
 if os.name == 'nt':
     DATASET_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_montreal.h5py")
     VALIDATION_PATH = os.path.join("B:", "documents", "sc2_datasets", "wcs_global.h5py")
@@ -27,15 +28,24 @@ else:
 
 def discriminate(dataset_path, validation_path=None, out_path=None):
     print("Loading training set %s..." % dataset_path)
-    train_set = starcraft_dataset(dataset_path, batch_size=128)
+    use_validation = validation_path is not None
+    train_set = starcraft_dataset(
+        dataset_path,
+        train_percentage=1.0 if use_validation else 0.9,
+        batch_size=BATCH_SIZE
+    )
 
     if validation_path is not None:
         print("Loading validation set %s..." % validation_path)
-        validation_set = starcraft_dataset(validation_path, batch_size=128)
+        validation_set = starcraft_dataset(validation_path, batch_size=BATCH_SIZE)
     else:
-        validation_set = None
+        validation_set = starcraft_dataset(
+            dataset_path,
+            train_percentage=0.9,
+            val_split=True,
+            batch_size=BATCH_SIZE)
 
-    model = build_model(train_set)
+    model = build_model(train_set, training=True)
     model.summary()
     try:
         model.fit_generator(

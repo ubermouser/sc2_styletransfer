@@ -27,19 +27,18 @@ else:
     OUT_PATH = os.path.join("/media", "sf_B_DRIVE", "documents", "sc2_trained_model_shuffled.keras")
 
 
-def construct_identities(corpus, beheaded_model, names=None):
+def construct_identities(corpus, beheaded_model, labels, names=None):
     feature_outputs = beheaded_model.predict_generator(
         corpus,
         use_multiprocessing=USE_MULTIPROCESSING,
         workers=5,
-        steps=20,
         verbose=1)
 
     print("Constructing identity map...")
     if names is None:
-        names = np.unique(corpus.y.data[:len(feature_outputs)])
+        names = np.unique(labels[:len(feature_outputs)])
     identities = {
-        name: np.average(feature_outputs[corpus.y.data[:len(feature_outputs)] == name], axis=0)
+        name: np.average(feature_outputs[labels[:len(feature_outputs)] == name], axis=0)
         for name in names
     }
     return identities
@@ -77,15 +76,22 @@ def recognize(corpus_path, validation_path, model_path):
     beheaded_model = k.Model(inputs=model.inputs, outputs=model.get_layer("out_descriptor").output)
 
     target_names = starcraft_labels()
-    corpus_identities = construct_identities(corpus, beheaded_model, names=target_names)
+    name_identities = construct_identities(corpus, beheaded_model, corpus.y.data, names=target_names)
+    race_identities = construct_identities(corpus, beheaded_model, corpus.race.data, names=['Terran', 'Zerg', 'Protoss'])
 
     print("Computing similarity...")
-    y_pred = compute_similarity(corpus_identities, beheaded_model, validation_set)
-    y_pred = np.argmax(y_pred, axis=1)
-    y_true = np.argmax(validation_set.y[:len(y_pred)], axis=1)
+    y_pred = compute_similarity(name_identities, beheaded_model, validation_set)
+    race_pred = compute_similarity(race_identities, beheaded_model, validation_set)
 
     print("Evaluating...")
-    evaluate_feature(y_true, y_pred, target_names)
+    y_pred = np.argmax(y_pred, axis=1)
+    race_pred = np.argmax(race_pred, axis=1)
+
+    y_true = np.argmax(validation_set.y[:len(y_pred)], axis=1)
+    race_true = np.argmax(validation_set.race[:len(race_pred)], axis=1)
+
+    evaluate_feature(y_true, y_pred, target_names, filter_empty=True)
+    evaluate_feature(race_true, race_pred, ['Terran', 'Zerg', 'Protoss'])
 
 
 if __name__ == '__main__':

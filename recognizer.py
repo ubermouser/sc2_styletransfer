@@ -77,7 +77,7 @@ def recognize(corpus_path, validation_path, model_path):
 
     target_names = starcraft_labels()
     name_identities = construct_identities(corpus, beheaded_model, corpus.y.data, names=target_names)
-    race_identities = construct_identities(corpus, beheaded_model, corpus.race.data, names=['Terran', 'Zerg', 'Protoss'])
+    race_identities = construct_identities(corpus, beheaded_model, corpus.race.data, names=[b'Terran', b'Zerg', b'Protoss'])
 
     print("Computing similarity...")
     y_pred = compute_similarity(name_identities, beheaded_model, validation_set)

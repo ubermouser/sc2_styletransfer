@@ -50,7 +50,7 @@ point_flag.DEFINE_point("rgb_minimap_size", "128",
 flags.DEFINE_integer("parallel", 1, "How many instances to run in parallel.")
 flags.DEFINE_integer("step_mul", 8, "How many game steps per observation.")
 flags.DEFINE_string("replays", REPLAY_PATH, "Path to a directory of replays.")
-flags.DEFINE_string("out_path", "/tmp/output_%d.hdf5", "Path to an output hdf5.")
+flags.DEFINE_string("out_path", "/tmp/output_%d.zarr", "Path to an output file.")
 flags.DEFINE_enum("action_space", None, sc2_env.ActionSpace._member_names_,
                   # pylint: disable=protected-access
                   "Which action space to use. Needed if you take both feature "
@@ -232,7 +232,8 @@ class ReplayProcessor(multiprocessing.Process):
                             self.replay_queue.task_done()
                     self._update_stage("shutdown")
             except (protocol.ConnectionError, protocol.ProtocolError,
-                    remote_controller.RequestError):
+                    remote_controller.RequestError) as e:
+                self._print("Replay crashed: %s" % e)
                 self.stats.replay_stats.crashing_replays.add(replay_name)
             except KeyboardInterrupt:
                 return
@@ -357,7 +358,7 @@ def main(unused_argv):
                 p = ReplayProcessor(i, run_config, replay_queue, stats_queue, game_version)
                 p.daemon = True
                 p.start()
-                time.sleep(1)  # Stagger startups, otherwise they seem to conflict somehow
+                time.sleep(6)  # Stagger startups, otherwise they seem to conflict somehow
         else:
             ReplayProcessor(0, run_config, replay_queue, stats_queue, game_version).run()
 

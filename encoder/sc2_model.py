@@ -16,7 +16,12 @@ def build_minimap_input(dataset, regularizer, training=False):
         dtype=dataset.feature_minimap.dtype,
         name='feature_minimap')
 
-    minimap = k.layers.Lambda(lambda x: x[:, FEATURE_MINIMAP_PLAYER_RELATIVE, :, :])(input)
+    # handle CPU-preprocessing:
+    if len(dataset.feature_minimap.shape) == 3:
+        minimap = input
+    else:
+        minimap = k.layers.Lambda(lambda x: x[:, FEATURE_MINIMAP_PLAYER_RELATIVE, :, :])(input)
+
     embedding = k.layers.Embedding(
         len(features.PlayerRelative), 2,
         embeddings_regularizer=regularizer,
@@ -32,14 +37,22 @@ def build_screen_input(dataset, regularizer, training=False):
         dtype=dataset.feature_screen.dtype,
         name='feature_screen')
 
-    screen_units = k.layers.Lambda(lambda x: x[:, FEATURE_SCREEN_UNIT_CATEGORY, :, :])(input)
+    # handle CPU-preprocessing:
+    if dataset.feature_screen.shape[1] == 2:
+        unit_category = 1
+        player_relative = 0
+    else:
+        unit_category = FEATURE_SCREEN_UNIT_CATEGORY
+        player_relative = FEATURE_SCREEN_PLAYER_RELATIVE
+
+    screen_units = k.layers.Lambda(lambda x: x[:, unit_category, :, :])(input)
     embedding_units = k.layers.Embedding(
-        len(features.static_data.UNIT_TYPES) + 1, 6,
+        np.max(features.static_data.UNIT_TYPES) + 1, 6,
         embeddings_regularizer=regularizer,
         name="embedding_screen_units"
     )(screen_units)
 
-    screen_player = k.layers.Lambda(lambda x: x[:, FEATURE_SCREEN_PLAYER_RELATIVE, :, :])(input)
+    screen_player = k.layers.Lambda(lambda x: x[:, player_relative, :, :])(input)
     embedding_player = k.layers.Embedding(
         len(features.PlayerRelative), 2,
         embeddings_regularizer=regularizer,
@@ -59,13 +72,14 @@ def chain_conv_2d(filters, input, regularizer):
             activation='relu',
             kernel_regularizer=regularizer,
         )(out)
+        out = k.layers.BatchNormalization()(out)
 
     return out
 
 
 def build_model(dataset, training=False):
-    regularizer = k.regularizers.l2(l=1.0e-5)
-    optimizer = k.optimizers.Adam(lr=1.0e-4)
+    regularizer = k.regularizers.l2(l=1.0e-4)
+    optimizer = k.optimizers.Adam(lr=5.0e-4)
     metrics = [k.metrics.categorical_accuracy]
 
     # minimap channel:
@@ -78,12 +92,13 @@ def build_model(dataset, training=False):
     # reduce # of channels in the input
     feature_screen, screen_input = build_screen_input(dataset, regularizer, training)
     # collapse spatial dimensions
-    out_2 = chain_conv_2d([16, 18, 20, 22], screen_input, regularizer)
+    out_2 = chain_conv_2d([10, 12, 14, 16], screen_input, regularizer)
 
     # higher-level decision-making:
     out_1 = k.layers.Flatten()(out_1)
     out_2 = k.layers.Flatten()(out_2)
     out = k.layers.Concatenate()([out_1, out_2])
+    out = k.layers.Dropout(rate=0.9)(out)
     out = k.layers.Dense(
         50,
         activation='relu',

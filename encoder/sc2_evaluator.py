@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import classification_report
+from sklearn.manifold import TSNE
 
 
 def plot_confusion_matrix(
@@ -43,6 +44,23 @@ def plot_confusion_matrix(
     plt.tight_layout()
 
 
+def visualize_embedding(feature_outputs, label, race):
+    print("Constructing T-SNE embedding...")
+    embedding = TSNE(n_components=2, n_iter=2000, verbose=1).fit_transform(feature_outputs)
+
+    plt.figure()
+    plot_embedding(embedding, label)
+    plt.show()
+
+    plt.figure()
+    plot_embedding(embedding, race)
+    plt.show()
+
+
+def plot_embedding(embedding, label):
+    plt.scatter(embedding[:, 0], embedding[:, 1], c=label)
+
+
 def filter_empty_labels(y_true, y_pred, target_names):
     label_counts = np.bincount(y_true, minlength=len(target_names))
     num_nonzero_labels = np.count_nonzero(label_counts)
@@ -62,9 +80,43 @@ def filter_empty_labels(y_true, y_pred, target_names):
     return y_true, y_pred, target_names
 
 
-def evaluate_feature(y_true, y_pred, target_names, filter_empty=True):
+def filter_unknown_labels(y_true, y_pred, target_names):
+    unknown_label_idx = np.argwhere([target_name == 'UNKNOWN' for target_name in target_names])
+    if len(unknown_label_idx) == 0:
+        return y_true, y_pred, target_names
+    else:
+        unknown_label_idx = unknown_label_idx[0]
+
+    unknown_mask = y_pred != unknown_label_idx
+
+    y_true = y_true[unknown_mask]
+    y_pred = y_pred[unknown_mask]
+    target_names = target_names[:-1]
+
+    return y_true, y_pred, target_names
+
+
+def top_n_accuracy(y_true, y_pred, top_n):
+    if top_n == 1:
+        y_pred = np.argmax(y_pred, axis=1)
+        return y_pred
+
+    y_pred = np.argsort(y_pred, axis=1)[:, -top_n:]
+    top_n_match = np.any(np.equal(y_pred, np.expand_dims(y_true, axis=1)), axis=1)
+
+    # take best match:
+    y_pred = y_pred[:, -1]
+    # overwrite when top-N is correct:
+    y_pred[top_n_match] = y_true[top_n_match]
+    return y_pred
+
+
+def evaluate_feature(y_true, y_pred, target_names, filter_empty=True, filter_unknown=True):
     if filter_empty:
         y_true, y_pred, target_names = filter_empty_labels(y_true, y_pred, target_names)
+
+    if filter_unknown:
+        y_true, y_pred, target_names = filter_unknown_labels(y_true, y_pred, target_names)
 
     # classification report:
     print(classification_report(
@@ -77,3 +129,14 @@ def evaluate_feature(y_true, y_pred, target_names, filter_empty=True):
     plt.figure()
     plot_confusion_matrix(cm, target_names, normalize=True)
     plt.show()
+
+
+def evaluate_top_n_feature(y_true, y_pred, race_true, race_pred, target_names):
+    y_true = np.argmax(y_true, axis=1)
+    race_true = np.argmax(race_true, axis=1)
+
+    y_pred = top_n_accuracy(y_true, y_pred, 3)
+    race_pred = top_n_accuracy(race_true, race_pred, 1)
+
+    evaluate_feature(y_true, y_pred, target_names, filter_empty=True, filter_unknown=True)
+    evaluate_feature(race_true, race_pred, ['Terran', 'Zerg', 'Protoss'], filter_empty=False, filter_unknown=False)

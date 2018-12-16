@@ -1,20 +1,24 @@
+#!/usr/bin/python3
 from collections import defaultdict
 import sys
 
 import h5py
+import numcodecs
 import numpy as np
 import tqdm
+import zarr
 
-from encoder.replay_encoder import BatchExporter, ENCODER_DTYPE
 
-CHUNK_SIZE = 512
-BATCH_SIZE = 1024
-SCALE_OFFSET = {'feature_minimap', 'feature_screen'}
+from encoder.replay_encoder import CHUNK_SIZE, CHUNK_SHAPES, DEFAULT_ENCODER, ENCODERS
+
+numcodecs.blosc.set_nthreads(5)
+BATCH_SIZE = 2048
+
 
 def main(input_paths, out_path):
     in_files = [h5py.File(in_path) for in_path in input_paths]
     in_file_sizes = [0] * len(in_files)
-    out_file = h5py.File(out_path, mode='w')
+    out_file = zarr.open(out_path, mode='a')
 
     datasets = list(in_files[0].keys())
     datasets_per_file = defaultdict(dict)
@@ -27,15 +31,11 @@ def main(input_paths, out_path):
         current_infile = datasets_per_file[0][dataset]
         args = dict(
             name=dataset,
-            shape=(0,) + current_infile.shape[1:],
-            maxshape=(None,) + current_infile.shape[1:],
-            chunks=(CHUNK_SIZE,) + current_infile.shape[1:],
+            shape=current_infile.shape,
+            chunks=CHUNK_SHAPES.get(dataset, (CHUNK_SIZE,) + current_infile.shape[1:]),
             dtype=current_infile.dtype,
-            compression='gzip',
-            compression_opts=9,
-            shuffle=True,
-            scaleoffset=0 if dataset in SCALE_OFFSET else None
         )
+        args.update(ENCODERS.get(dataset, DEFAULT_ENCODER))
         print("Dataset %s: %s" % (dataset, args))
         out_set = out_file.create_dataset(**args)
 
@@ -48,11 +48,8 @@ def main(input_paths, out_path):
                 start = index_batch * BATCH_SIZE
                 end = min(len(current_infile), (index_batch + 1) * BATCH_SIZE)
 
-                batch = current_infile[start:end]
-                out_set.resize(out_set.shape[0] + len(batch), axis=0)
-                out_set[-len(batch):] = batch
-
-    out_file.close()
+                out_set[start:end] = current_infile[start:end]
+    out_file.store.close()
     return
 
 
